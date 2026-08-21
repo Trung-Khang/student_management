@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Quản Lý Dữ Liệu</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #fff; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: #2d2d2d; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { text-align: center; color: #4da6ff; margin-bottom: 20px; }
+        
+        /* Cụm nút công cụ chính */
+        .toolbar { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; }
+        button { padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; font-size: 14px; width: 130px; transition: 0.2s; }
+        button:hover { opacity: 0.8; transform: scale(1.02); }
+        
+        .btn-select { background-color: #007bff; }
+        .btn-insert { background-color: #28a745; }
+        .btn-update { background-color: #ffc107; color: black; }
+        .btn-delete { background-color: #dc3545; }
+        
+        #statusMessage { text-align: center; margin-bottom: 15px; font-style: italic; color: #ffeb3b; height: 20px; }
+        
+        /* Bảng dữ liệu */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #3d3d3d; cursor: pointer; }
+        th, td { border: 1px solid #555; padding: 12px; text-align: left; }
+        th { background-color: #4da6ff; color: #1e1e1e; }
+        tr:hover { background-color: #4f4f4f; }
+        tr.selected-row { background-color: #007bff !important; color: white; font-weight: bold; }
+        
+        /* Hộp thoại Modal */
+        .modal { display: none; position: fixed; z-index: 10; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        .modal-content { background-color: #2d2d2d; padding: 30px; border-radius: 8px; width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); position: relative; }
+        .modal-content h3 { margin-top: 0; color: #4da6ff; text-align: center; margin-bottom: 20px; }
+        .close-btn { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 24px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover { color: white; }
+        
+        /* Form trong Modal */
+        .modal input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #555; border-radius: 4px; background: #3d3d3d; color: white; box-sizing: border-box; }
+        .modal input::placeholder { color: #aaa; }
+        .modal-btn-group { display: flex; justify-content: center; }
+        .modal-btn-group button { width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Trình Quản Lý Dữ Liệu</h2>
+    
+    <!-- 4 Nút Công Cụ -->
+    <div class="toolbar">
+        <button class="btn-select" onclick="openModal('SELECT')">🔍 SELECT</button>
+        <button class="btn-insert" onclick="openModal('INSERT')">➕ INSERT</button>
+        <button class="btn-update" onclick="openModal('UPDATE')">✏️ UPDATE</button>
+        <button class="btn-delete" onclick="executeDelete()">🗑️ DELETE</button>
+    </div>
+
+    <div id="statusMessage">Hãy bấm vào một dòng trong bảng để chọn...</div>
+
+    <!-- Khu vực Bảng hiển thị dữ liệu -->
+    <table>
+        <thead>
+            <tr>
+                <th>Mã số</th>
+                <th>Tên</th>
+                <th>Địa chỉ</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Dữ liệu sẽ hiển thị ở đây -->
+        </tbody>
+    </table>
+</div>
+
+<!-- GIAO DIỆN HỘP THOẠI (MODAL) DÙNG CHUNG -->
+<div id="myModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <h3 id="modalTitle">Tiêu đề Modal</h3>
+        
+        <input type="number" id="m_id" placeholder="Nhập Mã số...">
+        <input type="text" id="m_name" placeholder="Nhập Tên...">
+        <!-- Đổi type thành text cho Địa chỉ -->
+        <input type="text" id="m_address" placeholder="Nhập Địa chỉ...">
+        
+        <div class="modal-btn-group">
+            <button id="modalSubmitBtn" onclick="submitModal()">Xác nhận</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // CƠ SỞ DỮ LIỆU GIẢ LẬP (Cập nhật Tuổi thành Địa chỉ)
+    let users = [
+        { id: 1, name: "Nguyễn Văn A", address: "Hà Nội" },
+        { id: 2, name: "Trần Thị B", address: "TP. Hồ Chí Minh" },
+        { id: 3, name: "Lê Văn C", address: "Đà Nẵng" }
+    ];
+    let nextId = 4;
+    let selectedId = null; 
+    let currentMode = '';  
+
+    // -----------------------------------------
+    // HÀM HIỂN THỊ DỮ LIỆU & CHỌN DÒNG
+    // -----------------------------------------
+    function renderTable(dataList) {
+        const tbody = document.getElementById("tableBody");
+        tbody.innerHTML = ""; 
+        dataList.forEach(user => {
+            const isSelected = user.id === selectedId ? "selected-row" : "";
+            tbody.innerHTML += `
+                <tr class="${isSelected}" onclick="selectRow(${user.id})">
+                    <td>${user.id}</td>
+                    <td>${user.name}</td>
+                    <td>${user.address}</td>
+                </tr>`;
+        });
+    }
+
+    function selectRow(id) {
+        selectedId = selectedId === id ? null : id; 
+        renderTable(users); 
+        if(selectedId) {
+            document.getElementById("statusMessage").innerText = `Đang chọn dữ liệu có Mã số = ${selectedId}`;
+        } else {
+            document.getElementById("statusMessage").innerText = `Đã bỏ chọn.`;
+        }
+    }
+
+    function showStatus(message) {
+        document.getElementById("statusMessage").innerText = message;
+    }
+
+    // -----------------------------------------
+    // XỬ LÝ HỘP THOẠI (MODAL)
+    // -----------------------------------------
+    function openModal(mode) {
+        currentMode = mode;
+        const modal = document.getElementById("myModal");
+        const title = document.getElementById("modalTitle");
+        const btn = document.getElementById("modalSubmitBtn");
+        
+        const inId = document.getElementById("m_id");
+        const inName = document.getElementById("m_name");
+        const inAddress = document.getElementById("m_address");
+
+        // Reset giá trị
+        inId.value = ""; inName.value = ""; inAddress.value = "";
+        inId.style.display = "none"; inName.style.display = "none"; inAddress.style.display = "none";
+
+        if (mode === 'INSERT') {
+            title.innerText = "Thêm Dữ Liệu Mới";
+            inName.style.display = "block";
+            inAddress.style.display = "block";
+            btn.innerText = "Thực hiện INSERT";
+            btn.className = "btn-insert";
+            modal.style.display = "flex";
+        } 
+        else if (mode === 'UPDATE') {
+            if (!selectedId) {
+                alert("Vui lòng click vào 1 dòng trong bảng để chọn trước khi UPDATE!");
+                return;
+            }
+            const user = users.find(u => u.id === selectedId);
+            title.innerText = `Cập nhật Mã số = ${selectedId}`;
+            inName.style.display = "block"; inName.value = user.name;
+            inAddress.style.display = "block"; inAddress.value = user.address;
+            btn.innerText = "Lưu UPDATE";
+            btn.className = "btn-update";
+            modal.style.display = "flex";
+        } 
+        else if (mode === 'SELECT') {
+            title.innerText = "Tìm Kiếm (Bỏ trống để tìm tất cả)";
+            inId.style.display = "block";
+            inName.style.display = "block";
+            btn.innerText = "Thực hiện SELECT";
+            btn.className = "btn-select";
+            modal.style.display = "flex";
+        }
+    }
+
+    function closeModal() {
+        document.getElementById("myModal").style.display = "none";
+    }
+
+    // Nút xác nhận bên trong Modal
+    function submitModal() {
+        if (currentMode === 'INSERT') {
+            const name = document.getElementById("m_name").value;
+            const address = document.getElementById("m_address").value;
+            if (!name || !address) return alert("Vui lòng nhập đầy đủ Tên và Địa chỉ!");
+            
+            users.push({ id: nextId, name: name, address: address });
+            showStatus(`Đã thêm dữ liệu với Mã số ${nextId}.`);
+            nextId++;
+            renderTable(users);
+            closeModal();
+        } 
+        else if (currentMode === 'UPDATE') {
+            const newName = document.getElementById("m_name").value;
+            const newAddress = document.getElementById("m_address").value;
+            if (!newName && !newAddress) return alert("Không có gì thay đổi!");
+            
+            const index = users.findIndex(u => u.id === selectedId);
+            users[index].name = newName;
+            users[index].address = newAddress;
+            
+            showStatus(`Cập nhật Mã số ${selectedId} thành công.`);
+            renderTable(users);
+            closeModal();
+        }
+        else if (currentMode === 'SELECT') {
+            const id = document.getElementById("m_id").value;
+            const name = document.getElementById("m_name").value.toLowerCase().trim();
+            
+            let filteredUsers = users;
+
+            if (id) { filteredUsers = filteredUsers.filter(u => u.id == id); }
+            if (name) { filteredUsers = filteredUsers.filter(u => u.name.toLowerCase().includes(name)); }
+
+            renderTable(filteredUsers);
+            selectedId = null; 
+            showStatus(`Tìm thấy ${filteredUsers.length} kết quả.`);
+            closeModal();
+        }
+    }
+
+    // -----------------------------------------
+    // LỆNH DELETE (Xóa trực tiếp không cần Modal)
+    // -----------------------------------------
+    function executeDelete() {
+        if (!selectedId) {
+            alert("Vui lòng click vào 1 dòng trong bảng để chọn trước khi DELETE!");
+            return;
+        }
+        if(confirm(`Bạn có chắc chắn muốn xóa dữ liệu có Mã số = ${selectedId}?`)) {
+            users = users.filter(u => u.id !== selectedId);
+            showStatus(`Đã xóa Mã số ${selectedId}.`);
+            selectedId = null; 
+            renderTable(users);
+        }
+    }
+
+    // Chạy khi vừa mở trang
+    renderTable(users);
+</script>
+
+</body>
+</html>
