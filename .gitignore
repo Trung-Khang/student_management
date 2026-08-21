@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Database file (sinh ra khi chạy)
+backend/students.db
+
+# Log tạm từ server dev
+server_*.log
+*.log
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

@@ -74,11 +74,11 @@
 
 <!-- GIAO DIỆN HỘP THOẠI (MODAL) DÙNG CHUNG -->
 <div id="myModal" class="modal">
-    <div class="modal-content">
+        <div class="modal-content">
         <span class="close-btn" onclick="closeModal()">&times;</span>
         <h3 id="modalTitle">Tiêu đề Modal</h3>
-        
-        <input type="number" id="m_id" placeholder="Nhập Mã số...">
+
+        <input type="text" id="m_id" placeholder="Nhập Mã số...">
         <input type="text" id="m_name" placeholder="Nhập Tên...">
         <!-- Đổi type thành text cho Địa chỉ -->
         <input type="text" id="m_address" placeholder="Nhập Địa chỉ...">
@@ -90,41 +90,67 @@
 </div>
 
 <script>
-    // CƠ SỞ DỮ LIỆU GIẢ LẬP (Cập nhật Tuổi thành Địa chỉ)
-    let users = [
-        { id: 1, name: "Nguyễn Văn A", address: "Hà Nội" },
-        { id: 2, name: "Trần Thị B", address: "TP. Hồ Chí Minh" },
-        { id: 3, name: "Lê Văn C", address: "Đà Nẵng" }
-    ];
-    let nextId = 4;
-    let selectedId = null; 
-    let currentMode = '';  
+    // API BASE URL - relative nên cùng nguồn với Flask (backend tự phục vụ frontend)
+    const API_URL = "/api/students";
+
+    let students = [];
+    let selectedId = null;
+    let currentMode = '';
+
+    // -----------------------------------------
+    // HÀM GỌI API (BACKEND)
+    // -----------------------------------------
+    async function apiRequest(url, method = 'GET', body = null) {
+        const options = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) options.body = JSON.stringify(body);
+
+        const res = await fetch(url, options);
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            throw new Error(data.error || `Lỗi API (${res.status})`);
+        }
+        return data;
+    }
+
+    // Lấy danh sách sinh viên từ backend
+    async function fetchStudents(params = {}) {
+        const qs = new URLSearchParams(params).toString();
+        const url = qs ? `${API_URL}?${qs}` : API_URL;
+        students = await apiRequest(url);
+        renderTable(students);
+        return students;
+    }
 
     // -----------------------------------------
     // HÀM HIỂN THỊ DỮ LIỆU & CHỌN DÒNG
     // -----------------------------------------
     function renderTable(dataList) {
         const tbody = document.getElementById("tableBody");
-        tbody.innerHTML = ""; 
-        dataList.forEach(user => {
-            const isSelected = user.id === selectedId ? "selected-row" : "";
+        tbody.innerHTML = "";
+        dataList.forEach(st => {
+            const isSelected = st.MaSo === selectedId ? "selected-row" : "";
             tbody.innerHTML += `
-                <tr class="${isSelected}" onclick="selectRow(${user.id})">
-                    <td>${user.id}</td>
-                    <td>${user.name}</td>
-                    <td>${user.address}</td>
+                <tr class="${isSelected}" onclick="selectRow('${st.MaSo}')">
+                    <td>${st.MaSo}</td>
+                    <td>${st.HoTen}</td>
+                    <td>${st.DiaChi || ''}</td>
                 </tr>`;
         });
     }
 
     function selectRow(id) {
-        selectedId = selectedId === id ? null : id; 
-        renderTable(users); 
-        if(selectedId) {
-            document.getElementById("statusMessage").innerText = `Đang chọn dữ liệu có Mã số = ${selectedId}`;
-        } else {
-            document.getElementById("statusMessage").innerText = `Đã bỏ chọn.`;
+        const newSel = selectedId === id ? null : id;
+        const message = document.getElementById("statusMessage");
+        if (newSel && !students.some(s => s.MaSo === newSel)) {
+            message.innerText = 'Không tìm thấy dữ liệu đã chọn (có thể đã bị xóa).';
+            return;
         }
+        selectedId = newSel;
+        message.innerText = selectedId
+            ? `Đang chọn dữ liệu có Mã số = ${selectedId}`
+            : 'Đã bỏ chọn.';
+        renderTable(students);
     }
 
     function showStatus(message) {
@@ -139,36 +165,36 @@
         const modal = document.getElementById("myModal");
         const title = document.getElementById("modalTitle");
         const btn = document.getElementById("modalSubmitBtn");
-        
+
         const inId = document.getElementById("m_id");
         const inName = document.getElementById("m_name");
         const inAddress = document.getElementById("m_address");
 
-        // Reset giá trị
         inId.value = ""; inName.value = ""; inAddress.value = "";
         inId.style.display = "none"; inName.style.display = "none"; inAddress.style.display = "none";
 
         if (mode === 'INSERT') {
             title.innerText = "Thêm Dữ Liệu Mới";
+            inId.style.display = "block";
             inName.style.display = "block";
             inAddress.style.display = "block";
             btn.innerText = "Thực hiện INSERT";
             btn.className = "btn-insert";
             modal.style.display = "flex";
-        } 
+        }
         else if (mode === 'UPDATE') {
             if (!selectedId) {
                 alert("Vui lòng click vào 1 dòng trong bảng để chọn trước khi UPDATE!");
                 return;
             }
-            const user = users.find(u => u.id === selectedId);
+            const st = students.find(s => s.MaSo === selectedId);
             title.innerText = `Cập nhật Mã số = ${selectedId}`;
-            inName.style.display = "block"; inName.value = user.name;
-            inAddress.style.display = "block"; inAddress.value = user.address;
+            inName.style.display = "block"; inName.value = st.HoTen;
+            inAddress.style.display = "block"; inAddress.value = st.DiaChi || "";
             btn.innerText = "Lưu UPDATE";
             btn.className = "btn-update";
             modal.style.display = "flex";
-        } 
+        }
         else if (mode === 'SELECT') {
             title.innerText = "Tìm Kiếm (Bỏ trống để tìm tất cả)";
             inId.style.display = "block";
@@ -184,65 +210,72 @@
     }
 
     // Nút xác nhận bên trong Modal
-    function submitModal() {
-        if (currentMode === 'INSERT') {
-            const name = document.getElementById("m_name").value;
-            const address = document.getElementById("m_address").value;
-            if (!name || !address) return alert("Vui lòng nhập đầy đủ Tên và Địa chỉ!");
-            
-            users.push({ id: nextId, name: name, address: address });
-            showStatus(`Đã thêm dữ liệu với Mã số ${nextId}.`);
-            nextId++;
-            renderTable(users);
-            closeModal();
-        } 
-        else if (currentMode === 'UPDATE') {
-            const newName = document.getElementById("m_name").value;
-            const newAddress = document.getElementById("m_address").value;
-            if (!newName && !newAddress) return alert("Không có gì thay đổi!");
-            
-            const index = users.findIndex(u => u.id === selectedId);
-            users[index].name = newName;
-            users[index].address = newAddress;
-            
-            showStatus(`Cập nhật Mã số ${selectedId} thành công.`);
-            renderTable(users);
-            closeModal();
-        }
-        else if (currentMode === 'SELECT') {
-            const id = document.getElementById("m_id").value;
-            const name = document.getElementById("m_name").value.toLowerCase().trim();
-            
-            let filteredUsers = users;
+    async function submitModal() {
+        const inId = document.getElementById("m_id");
+        const inName = document.getElementById("m_name");
+        const inAddress = document.getElementById("m_address");
 
-            if (id) { filteredUsers = filteredUsers.filter(u => u.id == id); }
-            if (name) { filteredUsers = filteredUsers.filter(u => u.name.toLowerCase().includes(name)); }
+        try {
+            if (currentMode === 'INSERT') {
+                const maso = inId.value.trim();
+                const name = inName.value.trim();
+                const address = inAddress.value.trim();
+                if (!maso || !name) return alert("Vui lòng nhập đầy đủ Mã số và Tên!");
 
-            renderTable(filteredUsers);
-            selectedId = null; 
-            showStatus(`Tìm thấy ${filteredUsers.length} kết quả.`);
-            closeModal();
+                await apiRequest(API_URL, 'POST', { maso, hoten: name, diachi: address });
+                showStatus(`Đã thêm dữ liệu Mã số ${maso}.`);
+                selectedId = null;
+                await fetchStudents();
+                closeModal();
+            }
+            else if (currentMode === 'UPDATE') {
+                const newName = inName.value.trim();
+                const newAddress = inAddress.value.trim();
+                if (!newName && !newAddress) return alert("Không có gì thay đổi!");
+
+                await apiRequest(`${API_URL}/${selectedId}`, 'PUT', { hoten: newName, diachi: newAddress });
+                showStatus(`Cập nhật Mã số ${selectedId} thành công.`);
+                await fetchStudents();
+                closeModal();
+            }
+            else if (currentMode === 'SELECT') {
+                const id = inId.value.trim();
+                const name = inName.value.trim();
+                await fetchStudents({ maso: id, hoten: name });
+                showStatus(`Tìm thấy ${students.length} kết quả.`);
+                selectedId = null;
+                closeModal();
+            }
+        } catch (err) {
+            alert(err.message);
         }
     }
 
     // -----------------------------------------
     // LỆNH DELETE (Xóa trực tiếp không cần Modal)
     // -----------------------------------------
-    function executeDelete() {
+    async function executeDelete() {
         if (!selectedId) {
             alert("Vui lòng click vào 1 dòng trong bảng để chọn trước khi DELETE!");
             return;
         }
-        if(confirm(`Bạn có chắc chắn muốn xóa dữ liệu có Mã số = ${selectedId}?`)) {
-            users = users.filter(u => u.id !== selectedId);
-            showStatus(`Đã xóa Mã số ${selectedId}.`);
-            selectedId = null; 
-            renderTable(users);
+        if (confirm(`Bạn có chắc chắn muốn xóa dữ liệu có Mã số = ${selectedId}?`)) {
+            try {
+                await apiRequest(`${API_URL}/${selectedId}`, 'DELETE');
+                showStatus(`Đã xóa Mã số ${selectedId}.`);
+                selectedId = null;
+                await fetchStudents();
+            } catch (err) {
+                alert(err.message);
+            }
         }
     }
 
-    // Chạy khi vừa mở trang
-    renderTable(users);
+        // Chạy khi vừa mở trang: lấy dữ liệu từ backend
+    fetchStudents().catch(err => {
+        showStatus('Không thể kết nối backend. Hãy chắc chắn đã chạy: py backend/app.py');
+        console.error(err);
+    });
 </script>
 
 </body>
